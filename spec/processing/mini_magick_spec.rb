@@ -39,10 +39,12 @@ describe CarrierWave::MiniMagick do
       @instance.should have_dimensions(200, 200)
       ::MiniMagick::Image.open(@instance.current_path)['format'].should =~ /PNG/
     end
-    
+
     it "should scale up the image if it smaller than the given dimensions" do
-      @instance.resize_to_fill(1000, 1000)
-      @instance.should have_dimensions(1000, 1000)
+      expect(::MiniMagick::Tool::Identify.new.verbose(@instance.current_path).call).to_not include('Quality: 70')
+      @instance.resize_to_fill(1000, 1000, combine_options: { quality: 70 })
+      expect(@instance).to have_dimensions(1000, 1000)
+      expect(::MiniMagick::Tool::Identify.new.verbose(@instance.current_path).call).to include('Quality: 70')
     end
   end
 
@@ -87,6 +89,12 @@ describe CarrierWave::MiniMagick do
       color.should_not include('#FFFFFF00')
     end
 
+    it 'should accept combine_options and set quality' do
+      expect(::MiniMagick::Tool::Identify.new.verbose(@instance.current_path).call).to_not include('Quality: 70')
+      @instance.resize_and_pad(1000, 1000, combine_options: {quality: 70})
+      expect(@instance).to have_dimensions(1000, 1000)
+      expect(::MiniMagick::Tool::Identify.new.verbose(@instance.current_path).call).to include('Quality: 70')
+    end
   end
 
   describe '#resize_to_fit' do
@@ -103,17 +111,21 @@ describe CarrierWave::MiniMagick do
       ::MiniMagick::Image.open(@instance.current_path)['format'].should =~ /PNG/
     end
 
-    it "should scale up the image if it smaller than the given dimensions" do
-      @instance.resize_to_fit(1000, 1000)
-      @instance.should have_dimensions(1000, 750)
+    it 'should scale up the image if it smaller than the given dimensions and set quality' do
+      expect(::MiniMagick::Tool::Identify.new.verbose(@instance.current_path).call).to_not include('Quality: 70')
+      @instance.resize_to_fit(1000, 1000, combine_options: {quality: 70})
+      expect(@instance).to have_dimensions(1000, 750)
+      expect(::MiniMagick::Tool::Identify.new.verbose(@instance.current_path).call).to include('Quality: 70')
     end
   end
 
   describe '#resize_to_limit' do
-    it "should resize the image to fit within the given dimensions and maintain file type" do
-      @instance.resize_to_limit(200, 200)
-      @instance.should have_dimensions(200, 150)
-      ::MiniMagick::Image.open(@instance.current_path)['format'].should =~ /JPEG/
+    it 'should resize the image to fit within the given dimensions, maintain file type and set quality' do
+      expect(::MiniMagick::Tool::Identify.new.verbose(@instance.current_path).call).to_not include('Quality: 70')
+      @instance.resize_to_limit(200, 200, combine_options: {quality: 70})
+      expect(@instance).to have_dimensions(200, 150)
+      expect(::MiniMagick::Image.open(@instance.current_path)['format']).to match(/JPEG/)
+      expect(::MiniMagick::Tool::Identify.new.verbose(@instance.current_path).call).to include('Quality: 70')
     end
 
     it "should resize the image to fit within the given dimensions and maintain updated file type" do
