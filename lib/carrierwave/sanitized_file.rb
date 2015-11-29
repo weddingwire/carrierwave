@@ -2,7 +2,13 @@
 
 require 'pathname'
 require 'active_support/core_ext/string/multibyte'
-require 'mime/types'
+
+begin
+  # Use mime/types/columnar if available, for reduced memory usage
+  require 'mime/types/columnar'
+rescue LoadError
+  require 'mime/types'
+end
 
 module CarrierWave
 
@@ -22,7 +28,7 @@ module CarrierWave
       attr_writer :sanitize_regexp
 
       def sanitize_regexp
-        @sanitize_regexp ||= /[^a-zA-Z0-9\.\-\+_]/
+        @sanitize_regexp ||= /[^[:word:]\.\-\+]/
       end
     end
 
@@ -142,8 +148,7 @@ module CarrierWave
     # [Boolean] Whether the file exists
     #
     def exists?
-      return File.exists?(self.path) if self.path
-      return false
+      self.path.present? && File.exist?(self.path)
     end
 
     ##
@@ -175,7 +180,7 @@ module CarrierWave
     # [permissions (Integer)] permissions to set on the file in its new location.
     # [directory_permissions (Integer)] permissions to set on created directories.
     #
-    def move_to(new_path, permissions=nil, directory_permissions=nil)
+    def move_to(new_path, permissions=nil, directory_permissions=nil, keep_filename=false)
       return if self.empty?
       new_path = File.expand_path(new_path)
 
@@ -186,7 +191,11 @@ module CarrierWave
         File.open(new_path, "wb") { |f| f.write(read) }
       end
       chmod!(new_path, permissions)
-      self.file = new_path
+      if keep_filename
+        self.file = {:tempfile => new_path, :filename => original_filename}
+      else
+        self.file = new_path
+      end
       self
     end
 
@@ -280,7 +289,7 @@ module CarrierWave
       if file.is_a?(Hash)
         @file = file["tempfile"] || file[:tempfile]
         @original_filename = file["filename"] || file[:filename]
-        @content_type = file["content_type"] || file[:content_type]
+        @content_type = file["content_type"] || file[:content_type] || file["type"] || file[:type]
       else
         @file = file
         @original_filename = nil
@@ -292,7 +301,7 @@ module CarrierWave
     def mkdir!(path, directory_permissions)
       options = {}
       options[:mode] = directory_permissions if directory_permissions
-      FileUtils.mkdir_p(File.dirname(path), options) unless File.exists?(File.dirname(path))
+      FileUtils.mkdir_p(File.dirname(path), options) unless File.exist?(File.dirname(path))
     end
 
     def chmod!(path, permissions)
@@ -301,7 +310,7 @@ module CarrierWave
 
     # Sanitize the filename, to prevent hacking
     def sanitize(name)
-      name = name.gsub("\\", "/") # work-around for IE
+      name = name.tr("\\", "/") # work-around for IE
       name = File.basename(name)
       name = name.gsub(sanitize_regexp,"_")
       name = "_#{name}" if name =~ /\A\.+\z/
