@@ -8,12 +8,12 @@ module CarrierWave
       include CarrierWave::Uploader::Callbacks
 
       included do
-        class_attribute :versions, :version_names, :instance_reader => false, :instance_writer => false
+        class_attribute :versions, :version_names, :version_options, :instance_reader => false, :instance_writer => false
 
         self.versions = {}
         self.version_names = []
 
-        attr_accessor :parent_cache_id
+        attr_accessor :parent_cache_id, :parent_version
 
         after :cache, :assign_parent_cache_id
         after :cache, :cache_versions!
@@ -50,72 +50,74 @@ module CarrierWave
         #
         def version(name, options = {}, &block)
           name = name.to_sym
-          build_version(name, options) unless versions[name]
+          build_version(name, options)
 
-          versions[name][:uploader].class_eval(&block) if block
+          versions[name].class_eval(&block) if block
           versions[name]
         end
 
         def recursively_apply_block_to_versions(&block)
           versions.each do |name, version|
-            version[:uploader].class_eval(&block)
-            version[:uploader].recursively_apply_block_to_versions(&block)
+            version.class_eval(&block)
+            version.recursively_apply_block_to_versions(&block)
           end
         end
 
       private
 
         def build_version(name, options)
-          uploader = Class.new(self)
-          const_set("Uploader#{uploader.object_id}".gsub('-', '_'), uploader)
-          uploader.version_names += [name]
-          uploader.versions = {}
-          uploader.processors = []
+          if !versions.has_key?(name)
+            uploader = Class.new(self)
+            const_set("Uploader#{uploader.object_id}".tr('-', '_'), uploader)
+            uploader.version_names += [name]
+            uploader.versions = {}
+            uploader.processors = []
+            uploader.version_options = options
 
-          uploader.class_eval <<-RUBY, __FILE__, __LINE__ + 1
-            # Define the enable_processing method for versions so they get the
-            # value from the parent class unless explicitly overwritten
-            def self.enable_processing(value=nil)
-              self.enable_processing = value if value
-              if !@enable_processing.nil?
-                @enable_processing
-              else
-                superclass.enable_processing
+            uploader.class_eval <<-RUBY, __FILE__, __LINE__ + 1
+              # Define the enable_processing method for versions so they get the
+              # value from the parent class unless explicitly overwritten
+              def self.enable_processing(value=nil)
+                self.enable_processing = value if value
+                if !@enable_processing.nil?
+                  @enable_processing
+                else
+                  superclass.enable_processing
+                end
               end
-            end
 
-            # Regardless of what is set in the parent uploader, do not enforce the
-            # move_to_cache config option on versions because it moves the original
-            # file to the version's target file.
-            #
-            # If you want to enforce this setting on versions, override this method
-            # in each version:
-            #
-            # version :thumb do
-            #   def move_to_cache
-            #     true
-            #   end
-            # end
-            #
-            def move_to_cache
-              false
-            end
-          RUBY
+              # Regardless of what is set in the parent uploader, do not enforce the
+              # move_to_cache config option on versions because it moves the original
+              # file to the version's target file.
+              #
+              # If you want to enforce this setting on versions, override this method
+              # in each version:
+              #
+              # version :thumb do
+              #   def move_to_cache
+              #     true
+              #   end
+              # end
+              #
+              def move_to_cache
+                false
+              end
+            RUBY
 
-          class_eval <<-RUBY
-            def #{name}
-              versions[:#{name}]
-            end
-          RUBY
+            class_eval <<-RUBY, __FILE__, __LINE__ + 1
+              def #{name}
+                versions[:#{name}]
+              end
+            RUBY
+          else
+            uploader = Class.new(versions[name])
+            const_set("Uploader#{uploader.object_id}".tr('-', '_'), uploader)
+            uploader.processors = []
+            uploader.version_options = uploader.version_options.merge(options)
+          end
 
           # Add the current version hash to class attribute :versions
-          current_version = {
-            name => {
-              :uploader => uploader,
-              :options  => options
-            }
-          }
-          self.versions = versions.merge(current_version)
+          self.versions = versions.merge(name => uploader)
         end
 
       end # ClassMethods
@@ -131,7 +133,8 @@ module CarrierWave
         return @versions if @versions
         @versions = {}
         self.class.versions.each do |name, version|
-          @versions[name] = version[:uploader].new(model, mounted_as)
+          @versions[name] = version.new(model, mounted_as)
+          @versions[name].parent_version = self
         end
         @versions
       end
@@ -160,7 +163,7 @@ module CarrierWave
 
         return false unless self.class.versions.has_key?(name)
 
-        condition = self.class.versions[name][:options][:if]
+        condition = self.class.versions[name].version_options[:if]
         if(condition)
           if(condition.respond_to?(:call))
             condition.call(self, :version => name, :file => file)
@@ -241,6 +244,18 @@ module CarrierWave
         end
       end
 
+      def dependent_versions
+        active_versions.reject do |name, v|
+          v.class.version_options[:from_version]
+        end.to_a + sibling_versions.select do |name, v|
+          v.class.version_options[:from_version] == self.class.version_names.last
+        end.to_a
+      end
+
+      def sibling_versions
+        parent_version.try(:versions) || []
+      end
+
       def full_filename(for_file)
         [version_name, super(for_file)].compact.join('_')
       end
@@ -250,29 +265,9 @@ module CarrierWave
       end
 
       def cache_versions!(new_file)
-        # We might have processed the new_file argument after the callbacks were
-        # initialized, so get the actual file based off of the current state of
-        # our file
-        processed_parent = SanitizedFile.new :tempfile => self.file,
-          :filename => new_file.original_filename
-
-        active_versions.each do |name, v|
-          next if v.cached?
-
-          v.send(:cache_id=, cache_id)
-          # If option :from_version is present, create cache using cached file from
-          # version indicated
-          if self.class.versions[name][:options] && self.class.versions[name][:options][:from_version]
-            # Maybe the reference version has not been cached yet
-            unless versions[self.class.versions[name][:options][:from_version]].cached?
-              versions[self.class.versions[name][:options][:from_version]].cache!(processed_parent)
-            end
-            processed_version = SanitizedFile.new :tempfile => versions[self.class.versions[name][:options][:from_version]],
-              :filename => new_file.original_filename
-            v.cache!(processed_version)
-          else
-            v.cache!(processed_parent)
-          end
+        dependent_versions.each do |name, v|
+          v.send(:cache_id=, @cache_id)
+          v.cache!(new_file)
         end
       end
 
@@ -290,11 +285,11 @@ module CarrierWave
       end
 
       def retrieve_versions_from_cache!(cache_name)
-        versions.each { |name, v| v.retrieve_from_cache!(cache_name) }
+        active_versions.each { |name, v| v.retrieve_from_cache!(cache_name) }
       end
 
       def retrieve_versions_from_store!(identifier)
-        versions.each { |name, v| v.retrieve_from_store!(identifier) }
+        active_versions.each { |name, v| v.retrieve_from_store!(identifier) }
       end
 
     end # Versions

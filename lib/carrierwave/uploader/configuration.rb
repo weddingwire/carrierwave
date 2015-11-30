@@ -5,7 +5,7 @@ module CarrierWave
       extend ActiveSupport::Concern
 
       included do
-        class_attribute :_storage, :instance_writer => false
+        class_attribute :_storage, :_cache_storage, :instance_writer => false
 
         add_config :root
         add_config :base_path
@@ -23,6 +23,7 @@ module CarrierWave
         add_config :remove_previously_stored_files_after_update
 
         # fog
+        add_config :fog_provider
         add_config :fog_attributes
         add_config :fog_credentials
         add_config :fog_directory
@@ -38,6 +39,7 @@ module CarrierWave
         add_config :validate_processing
         add_config :validate_download
         add_config :mount_on
+        add_config :cache_only
 
         # set default values
         reset_config
@@ -69,17 +71,55 @@ module CarrierWave
         #     storage MyCustomStorageEngine
         #
         def storage(storage = nil)
-          if storage
-            self._storage = storage.is_a?(Symbol) ? eval(storage_engines[storage]) : storage
+          case storage
+          when Symbol
+            if storage_engine = storage_engines[storage]
+              self._storage = eval storage_engine
+            else
+              raise CarrierWave::UnknownStorageError, "Unknown storage: #{storage}"
+            end
+          when nil
+            storage
+          else
+            self._storage = storage
           end
           _storage
         end
         alias_method :storage=, :storage
 
+        ##
+        # Sets the cache storage engine to be used when storing cache files with this uploader.
+        # Same as .storage except for required methods being #cache!(CarrierWave::SanitizedFile),
+        # #retrieve_from_cache! and #delete_dir!.
+        #
+        # === Parameters
+        #
+        # [storage (Symbol, Class)] The cache storage engine to use for this uploader
+        #
+        # === Returns
+        #
+        # [Class] the cache storage engine to be used with this uploader
+        #
+        # === Examples
+        #
+        #     cache_storage :file
+        #     cache_storage CarrierWave::Storage::File
+        #     cache_storage MyCustomStorageEngine
+        #
+        def cache_storage(storage = nil)
+          if storage
+            self._cache_storage = storage.is_a?(Symbol) ? eval(storage_engines[storage]) : storage
+          end
+          _cache_storage
+        end
+        alias_method :cache_storage=, :cache_storage
+
         def add_config(name)
           class_eval <<-RUBY, __FILE__, __LINE__ + 1
             def self.eager_load_fog(fog_credentials)
               # see #1198. This will hopefully no longer be necessary after fog 2.0
+              require self.fog_provider
+              require 'carrierwave/storage/fog'
               Fog::Storage.new(fog_credentials) if fog_credentials.present?
             end
 
@@ -93,12 +133,12 @@ module CarrierWave
             end
 
             def self.#{name}=(value)
-              eager_load_fog(value) if '#{name}' == 'fog_credentials'
+              eager_load_fog(value) if '#{name}' == 'fog_credentials' && value.present?
               @#{name} = value
             end
 
             def #{name}=(value)
-              self.class.eager_load_fog(value) if '#{name}' == 'fog_credentials'
+              self.class.eager_load_fog(value) if '#{name}' == 'fog_credentials' && value.present?
               @#{name} = value
             end
 
@@ -107,7 +147,7 @@ module CarrierWave
               value = self.class.#{name} unless instance_variable_defined?(:@#{name})
               if value.instance_of?(Proc)
                 value.arity >= 1 ? value.call(self) : value.call
-              else 
+              else
                 value
               end
             end
@@ -130,6 +170,8 @@ module CarrierWave
               :fog  => "CarrierWave::Storage::Fog"
             }
             config.storage = :file
+            config.cache_storage = :file
+            config.fog_provider = 'fog'
             config.fog_attributes = {}
             config.fog_credentials = {}
             config.fog_public = true

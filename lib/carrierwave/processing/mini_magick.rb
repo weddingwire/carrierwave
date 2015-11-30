@@ -39,6 +39,7 @@ module CarrierWave
   #           img
   #         end
   #       end
+  #     end
   #
   # === Note
   #
@@ -49,7 +50,7 @@ module CarrierWave
   #
   # http://mini_magick.rubyforge.org/
   # and
-  # https://github.com/minimagic/minimagick/
+  # https://github.com/minimagick/minimagick/
   #
   #
   module MiniMagick
@@ -81,7 +82,7 @@ module CarrierWave
         process :resize_to_fill => [width, height, gravity]
       end
 
-      def resize_and_pad(width, height, background=:transparent, gravity=::Magick::CenterGravity)
+      def resize_and_pad(width, height, background=:transparent, gravity='Center')
         process :resize_and_pad => [width, height, background, gravity]
       end
     end
@@ -103,10 +104,10 @@ module CarrierWave
     #
     #     image.convert(:png)
     #
-    def convert(format)
+    def convert(format, page=nil)
       @format = format
+      @page = page
       manipulate! do |img|
-        img.format(format.to_s.downcase)
         img = yield(img) if block_given?
         img
       end
@@ -127,9 +128,12 @@ module CarrierWave
     #
     # [MiniMagick::Image] additional manipulations to perform
     #
-    def resize_to_limit(width, height)
+    def resize_to_limit(width, height, combine_options: {})
       manipulate! do |img|
-        img.resize "#{width}x#{height}>"
+        img.combine_options do |cmd|
+          cmd.resize "#{width}x#{height}>"
+          append_combine_options cmd, combine_options
+        end
         img = yield(img) if block_given?
         img
       end
@@ -149,9 +153,12 @@ module CarrierWave
     #
     # [MiniMagick::Image] additional manipulations to perform
     #
-    def resize_to_fit(width, height)
+    def resize_to_fit(width, height, combine_options: {})
       manipulate! do |img|
-        img.resize "#{width}x#{height}"
+        img.combine_options do |cmd|
+          cmd.resize "#{width}x#{height}"
+          append_combine_options cmd, combine_options
+        end
         img = yield(img) if block_given?
         img
       end
@@ -172,7 +179,7 @@ module CarrierWave
     #
     # [MiniMagick::Image] additional manipulations to perform
     #
-    def resize_to_fill(width, height, gravity = 'Center')
+    def resize_to_fill(width, height, gravity = 'Center', combine_options: {})
       manipulate! do |img|
         cols, rows = img[:dimensions]
         img.combine_options do |cmd|
@@ -192,6 +199,7 @@ module CarrierWave
           cmd.gravity gravity
           cmd.background "rgba(255,255,255,0.0)"
           cmd.extent "#{width}x#{height}" if cols != width || rows != height
+          append_combine_options cmd, combine_options
         end
         img = yield(img) if block_given?
         img
@@ -218,7 +226,7 @@ module CarrierWave
     #
     # [MiniMagick::Image] additional manipulations to perform
     #
-    def resize_and_pad(width, height, background=:transparent, gravity='Center')
+    def resize_and_pad(width, height, background=:transparent, gravity='Center', combine_options: {})
       manipulate! do |img|
         img.combine_options do |cmd|
           cmd.thumbnail "#{width}x#{height}>"
@@ -229,10 +237,48 @@ module CarrierWave
           end
           cmd.gravity gravity
           cmd.extent "#{width}x#{height}"
+          append_combine_options cmd, combine_options
         end
         img = yield(img) if block_given?
         img
       end
+    end
+
+    ##
+    # Return the mini magic instance of the image
+    #
+    # === Returns
+    #
+    # #<MiniMagick::Image>
+    #
+    def mini_magic_image
+      if url
+        ::MiniMagick::Image.open(url)
+      else
+        ::MiniMagick::Image.open(current_path)
+      end
+    end
+
+    ##
+    # Gives the width of the image, useful for model validation
+    #
+    # === Returns
+    #
+    # [Integer] the image's width in pixels
+    #
+    def width
+      mini_magic_image[:width]
+    end
+
+    ##
+    # Gives the height of the image, useful for model validation
+    #
+    # === Returns
+    #
+    # [Integer] the image's height in pixels
+    #
+    def height
+      mini_magic_image[:height]
     end
 
     ##
@@ -260,9 +306,15 @@ module CarrierWave
       image = ::MiniMagick::Image.open(current_path)
 
       begin
-        image.format(@format.to_s.downcase) if @format
+        image.format(@format.to_s.downcase, @page) if @format
         image = yield(image)
         image.write(current_path)
+
+        if @format
+          move_to = current_path.chomp(File.extname(current_path)) + ".#{@format}"
+          file.move_to(move_to, permissions, directory_permissions)
+        end
+
         image.run_command("identify", current_path)
       ensure
         image.destroy!
@@ -271,6 +323,19 @@ module CarrierWave
       default = I18n.translate(:"errors.messages.mini_magick_processing_error", :e => e, :locale => :en)
       message = I18n.translate(:"errors.messages.mini_magick_processing_error", :e => e, :default => default)
       raise CarrierWave::ProcessingError, message
+    end
+
+    ##
+    # Takes a hash of options for a combine_options cmd and appends to command on each option
+    #
+    # === Parameters
+    #
+    # [cmd (MiniMagick::Tool)] command tool
+    # [combine_options (Hash)] a hash of command options and values
+    def append_combine_options(cmd, combine_options)
+      combine_options.each do |method, options|
+        cmd.send(method, options)
+      end
     end
 
   end # MiniMagick
