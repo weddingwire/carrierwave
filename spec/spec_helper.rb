@@ -3,6 +3,7 @@
 require 'rubygems'
 require 'bundler/setup'
 
+require 'pry'
 require 'tempfile'
 require 'time'
 require 'logger'
@@ -12,8 +13,11 @@ require 'timecop'
 require 'open-uri'
 require 'sham_rack'
 require 'mini_magick'
-require 'generator_spec'
-
+if RUBY_ENGINE == 'jruby'
+  require 'activerecord-jdbcmysql-adapter'
+else
+  require 'mysql2'
+end
 require 'fog'
 require 'storage/fog_helper'
 
@@ -37,6 +41,10 @@ def public_path( *paths )
   File.expand_path(File.join(File.dirname(__FILE__), 'public', *paths))
 end
 
+def tmp_path( *paths )
+  File.expand_path(File.join(File.dirname(__FILE__), 'tmp', *paths))
+end
+
 CarrierWave.root = public_path
 I18n.load_path << File.expand_path(File.join(File.dirname(__FILE__), "..", "lib", "carrierwave", "locale", 'en.yml'))
 
@@ -44,8 +52,8 @@ module CarrierWave
   module Test
     module MockStorage
       def mock_storage(kind)
-        storage = mock("storage for #{kind} uploader")
-        storage.stub!(:setup!)
+        storage = double("storage for #{kind} uploader")
+        storage.stub(:setup!)
         storage
       end
     end
@@ -82,7 +90,7 @@ module CarrierWave
         else
           t = StringIO.new
         end
-        t.stub!(:local_path => "",
+        t.stub(:local_path => "",
                 :original_filename => filename || fake_name,
                 :content_type => mime_type)
         return t
@@ -123,4 +131,7 @@ RSpec.configure do |config|
   config.include CarrierWave::Test::MockStorage
   config.include CarrierWave::Test::I18nHelpers
   config.include CarrierWave::Test::ManipulationHelpers
+  if RUBY_ENGINE == 'jruby'
+    config.filter_run_excluding :rmagick => true
+  end
 end

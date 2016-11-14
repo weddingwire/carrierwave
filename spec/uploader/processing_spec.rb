@@ -83,7 +83,7 @@ describe CarrierWave::Uploader do
       @uploader.process!("test.jpg")
     end
 
-    context "when using RMagick" do
+    context "when using RMagick", :rmagick => true do
       before do
         def @uploader.cover
           manipulate! { |frame, index| frame if index.zero? }
@@ -138,7 +138,7 @@ describe CarrierWave::Uploader do
 
   describe '#cache!' do
     before do
-      CarrierWave.stub!(:generate_cache_id).and_return('1369894322-345-2255')
+      CarrierWave.stub(:generate_cache_id).and_return('1369894322-345-2255')
     end
 
     it "should trigger a process!" do
@@ -149,7 +149,7 @@ describe CarrierWave::Uploader do
 
   describe '#recreate_versions!' do
     before do
-      CarrierWave.stub!(:generate_cache_id).and_return('1369894322-345-2255')
+      CarrierWave.stub(:generate_cache_id).and_return('1369894322-345-2255')
     end
 
     it "should trigger a process!" do

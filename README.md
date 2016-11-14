@@ -3,8 +3,8 @@
 This gem provides a simple and extremely flexible way to upload files from Ruby applications.
 It works well with Rack based web applications, such as Ruby on Rails.
 
-[![Build Status](https://travis-ci.org/carrierwaveuploader/carrierwave.png?branch=master)](http://travis-ci.org/carrierwaveuploader/carrierwave)
-[![Code Climate](https://codeclimate.com/github/carrierwaveuploader/carrierwave.png)](https://codeclimate.com/github/carrierwaveuploader/carrierwave)
+[![Build Status](https://travis-ci.org/carrierwaveuploader/carrierwave.svg?branch=master)](http://travis-ci.org/carrierwaveuploader/carrierwave)
+[![Code Climate](http://img.shields.io/codeclimate/github/carrierwaveuploader/carrierwave.svg)](https://codeclimate.com/github/carrierwaveuploader/carrierwave)
 
 ## Information
 
@@ -100,8 +100,8 @@ automatically be stored when the record is saved.
 
 ```ruby
 u = User.new
-u.avatar = params[:file]
-u.avatar = File.open('somewhere')
+u.avatar = params[:file] # Assign a file like this, or
+u.avatar = File.open('somewhere') # like this
 u.save!
 u.avatar.url # => '/url/to/file.png'
 u.avatar.current_path # => 'path/to/file.png'
@@ -146,7 +146,7 @@ end
 
 ## Securing uploads
 
-Certain file might be dangerous if uploaded to the wrong location, such as php
+Certain files might be dangerous if uploaded to the wrong location, such as php
 files or other script files. CarrierWave allows you to specify a white-list of
 allowed extensions.
 
@@ -170,7 +170,7 @@ white-listed characters in the file name. If you want to support local scripts (
 have to override `sanitize_regexp` method. It should return regular expression which would match
 all *non*-allowed symbols.
 
-With Ruby 1.9 and higher you can simply write (as it has [Oniguruma](http://oniguruma.rubyforge.org/oniguruma/)
+With Ruby 2.0 and higher you can simply write (as it has [Onigmo](https://github.com/k-takata/Onigmo)
 built-in):
 
 ```ruby
@@ -189,20 +189,8 @@ plugins or client-side software.
 
 ## Setting the content type
 
-If you care about the content type of your files and notice that it's not being set
-as expected, you can configure your uploaders to use `CarrierWave::MimeTypes`.
-This adds a dependency on the [mime-types](http://rubygems.org/gems/mime-types) gem,
-but is recommended when using fog, and fog already has a dependency on mime-types.
-
-```ruby
-require 'carrierwave/processing/mime_types'
-
-class MyUploader < CarrierWave::Uploader::Base
-  include CarrierWave::MimeTypes
-
-  process :set_content_type
-end
-```
+As of v0.10.0, the `mime-types` gem is a runtime dependency and the content type is set automatically.
+You no longer need to do this manually.
 
 ## Adding versions
 
@@ -443,7 +431,7 @@ instance.recreate_versions!(:thumb, :large)
 Or on a mounted uploader:
 
 ```ruby
-User.all.each do |user|
+User.find_each do |user|
   user.avatar.recreate_versions!
 end
 ```
@@ -451,7 +439,7 @@ end
 Note: `recreate_versions!` will throw an exception on records without an image. To avoid this, scope the records to those with images or check if an image exists within the block. If you're using ActiveRecord, recreating versions for a user avatar might look like this:
 
 ```ruby
-User.all.each do |user|
+User.find_each do |user|
   user.avatar.recreate_versions! if user.avatar?
 end
 ```
@@ -552,7 +540,7 @@ Processing can be enabled for a single version by setting the processing flag on
 [Fog](http://github.com/fog/fog) is used to support Amazon S3. Ensure you have it in your Gemfile:
 
 ```ruby
-gem "fog", "~> 1.3.1"
+gem "fog"
 ```
 
 You'll need to provide your fog_credentials and a fog_directory (also known as a bucket) in an initializer.
@@ -569,9 +557,9 @@ CarrierWave.configure do |config|
     :host                   => 's3.example.com',             # optional, defaults to nil
     :endpoint               => 'https://s3.example.com:8080' # optional, defaults to nil
   }
-  config.fog_directory  = 'name_of_directory'                     # required
-  config.fog_public     = false                                   # optional, defaults to true
-  config.fog_attributes = {'Cache-Control'=>'max-age=315576000'}  # optional, defaults to {}
+  config.fog_directory  = 'name_of_directory'                          # required
+  config.fog_public     = false                                        # optional, defaults to true
+  config.fog_attributes = {'Cache-Control'=>"max-age=#{365.day.to_i}"} # optional, defaults to {}
 end
 ```
 
@@ -680,6 +668,22 @@ end
 
 That's it! You can still use the `CarrierWave::Uploader#url` method to return
 the url to the file on Google.
+
+## Optimized Loading of Fog
+
+Since Carrierwave doesn't know which parts of Fog you intend to use, it will just load the entire library. If you prefer to load fewer classes into your application, you need to load those parts of Fog yourself *before* loading Carrierwave:
+
+```ruby
+gem "fog", "~> 1.20", require: "fog/aws/storage"
+gem "carrierwave"
+```
+
+And in e.g. your uploader or an initializer:
+
+```ruby
+require 'fog/aws/storage'
+require 'carrierwave'
+```
 
 ## Dynamic Asset Host
 
@@ -854,7 +858,7 @@ See [CONTRIBUTING.md](https://github.com/carrierwaveuploader/carrierwave/blob/ma
 
 ## License
 
-Copyright (c) 2008-2013 Jonas Nicklas
+Copyright (c) 2008-2014 Jonas Nicklas
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the

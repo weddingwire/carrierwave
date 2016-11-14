@@ -15,7 +15,7 @@ Gem::Specification.new do |s|
   s.summary = "Ruby file upload library"
   s.email = ["jonas.nicklas@gmail.com"]
   s.extra_rdoc_files = ["README.md"]
-  s.files = Dir.glob("{bin,lib}/**/*") + %w(README.md)
+  s.files = Dir["{bin,lib}/**/*", "README.md"]
   s.homepage = %q{https://github.com/carrierwaveuploader/carrierwave}
   s.rdoc_options = ["--main"]
   s.require_paths = ["lib"]
@@ -28,18 +28,22 @@ Gem::Specification.new do |s|
   s.add_dependency "activemodel", ">= 3.2.0"
   s.add_dependency "json", ">= 1.7"
   s.add_dependency "mime-types", ">= 1.16"
-
-  s.add_development_dependency "pg"
+  if RUBY_ENGINE == 'jruby'
+    s.add_development_dependency 'activerecord-jdbcmysql-adapter'
+  else
+    s.add_development_dependency "mysql2"
+  end
   s.add_development_dependency "rails", ">= 3.2.0"
   s.add_development_dependency "cucumber", "~> 1.3.2"
-  s.add_development_dependency "rspec", "~> 2.13.0"
+  s.add_development_dependency "rspec", "~> 2.14.1"
   s.add_development_dependency "sham_rack"
-  s.add_development_dependency "fog", "~> 1.20.0"
-  s.add_development_dependency "unf"
-  s.add_development_dependency "net-ssh", "~> 2.9.0"
+  s.add_development_dependency "fog", ">= 1.3.1"
   s.add_development_dependency "mini_magick", ">= 3.6.0"
-  s.add_development_dependency "rmagick"
-  s.add_development_dependency "nokogiri", "~> 1.5.10" # 1.6 requires ruby > 1.8.7
-  s.add_development_dependency "timecop", "0.6.1" # 0.6.2 requires ruby > 1.8.7
+  if RUBY_ENGINE != 'jruby'
+    s.add_development_dependency "rmagick"
+  end
+  s.add_development_dependency "nokogiri", "~> 1.6.3"
+  s.add_development_dependency "timecop", "0.7.1"
   s.add_development_dependency "generator_spec"
+  s.add_development_dependency "pry"
 end

@@ -10,7 +10,7 @@ describe CarrierWave::SanitizedFile do
   end
 
   after(:all) do
-    if File.exists?(file_path('llama.jpg'))
+    if File.exist?(file_path('llama.jpg'))
       FileUtils.rm(file_path('llama.jpg'))
     end
     FileUtils.rm_rf(public_path)
@@ -37,19 +37,19 @@ describe CarrierWave::SanitizedFile do
 
   describe '#original_filename' do
     it "should default to the original_filename" do
-      file = mock('file', :original_filename => 'llama.jpg')
+      file = double('file', :original_filename => 'llama.jpg')
       sanitized_file = CarrierWave::SanitizedFile.new(file)
       sanitized_file.original_filename.should == "llama.jpg"
     end
 
     it "should defer to the base name of the path if original_filename is unavailable" do
-      file = mock('file', :path => '/path/to/test.jpg')
+      file = double('file', :path => '/path/to/test.jpg')
       sanitized_file = CarrierWave::SanitizedFile.new(file)
       sanitized_file.original_filename.should == "test.jpg"
     end
 
     it "should be nil otherwise" do
-      file = mock('file')
+      file = double('file')
       sanitized_file = CarrierWave::SanitizedFile.new(file)
       sanitized_file.original_filename.should be_nil
     end
@@ -186,9 +186,9 @@ describe CarrierWave::SanitizedFile do
 
     it "should handle Mime::Type object" do
       @file = File.open(file_path('sponsored.doc'))
-      @file.stub!(:content_type).and_return(MIME::Type.new('application/msword'))
+      @file.stub(:content_type).and_return(MIME::Type.new('application/msword'))
       @sanitized_file = CarrierWave::SanitizedFile.new(@file)
-      @sanitized_file.stub!(:file).and_return(@file)
+      @sanitized_file.stub(:file).and_return(@file)
       lambda { @sanitized_file.content_type }.should_not raise_error
       @sanitized_file.content_type.should == 'application/msword'
     end
@@ -260,7 +260,7 @@ describe CarrierWave::SanitizedFile do
       it "should be moved to the correct location" do
         @sanitized_file.move_to(file_path('gurr.png'))
 
-        File.exists?( file_path('gurr.png') ).should be_true
+        File.exist?( file_path('gurr.png') ).should be_true
       end
 
       it "should have changed its path when moved" do
@@ -309,7 +309,7 @@ describe CarrierWave::SanitizedFile do
       it "should be copied to the correct location" do
         @sanitized_file.copy_to(file_path('gurr.png'))
 
-        File.exists?( file_path('gurr.png') ).should be_true
+        File.exist?( file_path('gurr.png') ).should be_true
 
         file_path('gurr.png').should be_identical_to(file_path('llama.jpg'))
       end
@@ -403,9 +403,9 @@ describe CarrierWave::SanitizedFile do
 
     describe '#delete' do
       it "should remove it from the filesystem" do
-        File.exists?(@sanitized_file.path).should be_true
+        File.exist?(@sanitized_file.path).should be_true
         @sanitized_file.delete
-        File.exists?(@sanitized_file.path).should be_false
+        File.exist?(@sanitized_file.path).should be_false
       end
     end
 

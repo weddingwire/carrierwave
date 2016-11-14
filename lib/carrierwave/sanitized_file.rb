@@ -142,7 +142,7 @@ module CarrierWave
     # [Boolean] Whether the file exists
     #
     def exists?
-      return File.exists?(self.path) if self.path
+      return File.exist?(self.path) if self.path
       return false
     end
 
@@ -175,7 +175,7 @@ module CarrierWave
     # [permissions (Integer)] permissions to set on the file in its new location.
     # [directory_permissions (Integer)] permissions to set on created directories.
     #
-    def move_to(new_path, permissions=nil, directory_permissions=nil)
+    def move_to(new_path, permissions=nil, directory_permissions=nil, keep_filename=false)
       return if self.empty?
       new_path = File.expand_path(new_path)
 
@@ -186,7 +186,11 @@ module CarrierWave
         File.open(new_path, "wb") { |f| f.write(read) }
       end
       chmod!(new_path, permissions)
-      self.file = new_path
+      if keep_filename
+        self.file = {:tempfile => new_path, :filename => original_filename}
+      else
+        self.file = new_path
+      end
       self
     end
 
@@ -292,7 +296,7 @@ module CarrierWave
     def mkdir!(path, directory_permissions)
       options = {}
       options[:mode] = directory_permissions if directory_permissions
-      FileUtils.mkdir_p(File.dirname(path), options) unless File.exists?(File.dirname(path))
+      FileUtils.mkdir_p(File.dirname(path), options) unless File.exist?(File.dirname(path))
     end
 
     def chmod!(path, permissions)
