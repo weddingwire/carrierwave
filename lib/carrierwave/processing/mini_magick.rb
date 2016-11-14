@@ -81,7 +81,7 @@ module CarrierWave
         process :resize_to_fill => [width, height, gravity]
       end
 
-      def resize_and_pad(width, height, background=:transparent, gravity=::Magick::CenterGravity)
+      def resize_and_pad(width, height, background=:transparent, gravity='Center')
         process :resize_and_pad => [width, height, background, gravity]
       end
     end
@@ -244,6 +244,43 @@ module CarrierWave
     end
 
     ##
+    # Return the mini magic instance of the image
+    #
+    # === Returns
+    #
+    # #<MiniMagick::Image>
+    #
+    def mini_magic_image
+      if url
+        ::MiniMagick::Image.open(url)
+      else
+        ::MiniMagick::Image.open(current_path)
+      end
+    end
+
+    ##
+    # Gives the width of the image, useful for model validation
+    #
+    # === Returns
+    #
+    # [Integer] the image's width in pixels
+    #
+    def width
+      mini_magic_image[:width]
+    end
+
+    ##
+    # Gives the height of the image, useful for model validation
+    #
+    # === Returns
+    #
+    # [Integer] the image's height in pixels
+    #
+    def height
+      mini_magic_image[:height]
+    end
+
+    ##
     # Manipulate the image with MiniMagick. This method will load up an image
     # and then pass each of its frames to the supplied block. It will then
     # save the image to disk.
@@ -271,6 +308,12 @@ module CarrierWave
         image.format(@format.to_s.downcase) if @format
         image = yield(image)
         image.write(current_path)
+
+        if @format
+          move_to = current_path.chomp(File.extname(current_path)) + ".#{@format}"
+          file.move_to(move_to, permissions, directory_permissions)
+        end
+
         image.run_command("identify", current_path)
       ensure
         image.destroy!

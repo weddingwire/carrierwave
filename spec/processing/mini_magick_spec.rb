@@ -5,17 +5,19 @@ require 'spec_helper'
 describe CarrierWave::MiniMagick do
 
   before do
-    @klass = Class.new do
+    @klass = Class.new(CarrierWave::Uploader::Base) do
       include CarrierWave::MiniMagick
     end
     @instance = @klass.new
     FileUtils.cp(file_path('landscape.jpg'), file_path('landscape_copy.jpg'))
-    @instance.stub(:current_path).and_return(file_path('landscape_copy.jpg'))
     @instance.stub(:cached?).and_return true
+    @instance.stub(:url).and_return nil
+    @instance.stub(:file).and_return(CarrierWave::SanitizedFile.new(file_path('landscape_copy.jpg')))
   end
 
   after do
-    FileUtils.rm(file_path('landscape_copy.jpg'))
+    FileUtils.rm(file_path('landscape_copy.jpg')) if File.exist?(file_path('landscape_copy.jpg'))
+    FileUtils.rm(file_path('landscape_copy.png')) if File.exist?(file_path('landscape_copy.png'))
   end
 
   describe "#convert" do
@@ -23,6 +25,7 @@ describe CarrierWave::MiniMagick do
       @instance.convert('png')
       img = ::MiniMagick::Image.open(@instance.current_path)
       img['format'].should =~ /PNG/
+      @instance.file.extension.should == 'png'
     end
   end
 
@@ -38,6 +41,7 @@ describe CarrierWave::MiniMagick do
       @instance.resize_to_fill(200, 200)
       @instance.should have_dimensions(200, 200)
       ::MiniMagick::Image.open(@instance.current_path)['format'].should =~ /PNG/
+      @instance.file.extension.should == 'png'
     end
 
     it "should scale up the image if it smaller than the given dimensions" do
@@ -109,6 +113,7 @@ describe CarrierWave::MiniMagick do
       @instance.resize_to_fit(200, 200)
       @instance.should have_dimensions(200, 150)
       ::MiniMagick::Image.open(@instance.current_path)['format'].should =~ /PNG/
+      @instance.file.extension.should == 'png'
     end
 
     it 'should scale up the image if it smaller than the given dimensions and set quality' do
@@ -133,6 +138,7 @@ describe CarrierWave::MiniMagick do
       @instance.resize_to_limit(200, 200)
       @instance.should have_dimensions(200, 150)
       ::MiniMagick::Image.open(@instance.current_path)['format'].should =~ /PNG/
+      @instance.file.extension.should == 'png'
     end
 
     it "should not scale up the image if it smaller than the given dimensions" do
@@ -172,4 +178,13 @@ describe CarrierWave::MiniMagick do
       end
     end
   end
+
+  describe "return_width_and_height" do
+    it "should return the width and height of the image" do
+      @instance.resize_to_fill(200, 300)
+      @instance.width.should == 200
+      @instance.height.should == 300
+    end
+  end
+
 end
