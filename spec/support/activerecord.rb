@@ -11,6 +11,7 @@ dbconfig = {
   :adapter  => 'mysql2',
   :database => 'carrierwave_test',
   :username => 'root',
+  :password => 'rootpass',
   :encoding => 'utf8'
 }
 
