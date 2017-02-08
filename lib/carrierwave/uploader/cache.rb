@@ -1,5 +1,3 @@
-# encoding: utf-8
-
 module CarrierWave
 
   class FormNotMultipart < UploadError
@@ -8,15 +6,27 @@ module CarrierWave
     end
   end
 
+  class CacheCounter
+    @@counter = 0
+
+    def self.increment
+      @@counter += 1
+    end
+  end
+
   ##
   # Generates a unique cache id for use in the caching system
   #
   # === Returns
   #
-  # [String] a cache id in the format TIMEINT-PID-RND
+  # [String] a cache id in the format TIMEINT-PID-COUNTER-RND
   #
   def self.generate_cache_id
-    Time.now.utc.to_i.to_s + '-' + Process.pid.to_s + '-' + ("%04d" % rand(9999))
+    [Time.now.utc.to_i,
+      Process.pid,
+      '%04d' % (CarrierWave::CacheCounter.increment % 1000),
+      '%04d' % rand(9999)
+    ].map(&:to_s).join('-')
   end
 
   module Uploader
@@ -71,10 +81,8 @@ module CarrierWave
         _content = file.read
         if _content.is_a?(File) # could be if storage is Fog
           sanitized = CarrierWave::Storage::Fog.new(self).retrieve!(File.basename(_content.path))
-          sanitized.read if sanitized.exists?
-
         else
-          sanitized = SanitizedFile.new :tempfile => StringIO.new(file.read),
+          sanitized = SanitizedFile.new :tempfile => StringIO.new(_content),
             :filename => File.basename(path), :content_type => file.content_type
         end
         sanitized
@@ -85,7 +93,7 @@ module CarrierWave
       #
       # === Returns
       #
-      # [String] a cache name, in the format YYYYMMDD-HHMM-PID-RND/filename.txt
+      # [String] a cache name, in the format TIMEINT-PID-COUNTER-RND/filename.txt
       #
       def cache_name
         File.join(cache_id, full_original_filename) if cache_id and original_filename
@@ -109,29 +117,28 @@ module CarrierWave
       #
       def cache!(new_file = sanitized_file)
         new_file = CarrierWave::SanitizedFile.new(new_file)
+        return if new_file.empty?
 
-        unless new_file.empty?
-          raise CarrierWave::FormNotMultipart if new_file.is_path? && ensure_multipart_form
+        raise CarrierWave::FormNotMultipart if new_file.is_path? && ensure_multipart_form
 
-          self.cache_id = CarrierWave.generate_cache_id unless cache_id
+        self.cache_id = CarrierWave.generate_cache_id unless cache_id
 
-          @filename = new_file.filename
-          self.original_filename = new_file.filename
+        @filename = new_file.filename
+        self.original_filename = new_file.filename
 
-          begin
-            # first, create a workfile on which we perform processings
-            if move_to_cache
-              @file = new_file.move_to(File.expand_path(workfile_path, root), permissions, directory_permissions)
-            else
-              @file = new_file.copy_to(File.expand_path(workfile_path, root), permissions, directory_permissions)
-            end
-
-            with_callbacks(:cache, @file) do
-              @file = cache_storage.cache!(@file)
-            end
-          ensure
-            FileUtils.rm_rf(workfile_path(''))
+        begin
+          # first, create a workfile on which we perform processings
+          if move_to_cache
+            @file = new_file.move_to(File.expand_path(workfile_path, root), permissions, directory_permissions)
+          else
+            @file = new_file.copy_to(File.expand_path(workfile_path, root), permissions, directory_permissions)
           end
+
+          with_callbacks(:cache, @file) do
+            @file = cache_storage.cache!(@file)
+          end
+        ensure
+          FileUtils.rm_rf(workfile_path(''))
         end
       end
 
@@ -181,7 +188,9 @@ module CarrierWave
       alias_method :full_original_filename, :original_filename
 
       def cache_id=(cache_id)
-        raise CarrierWave::InvalidParameter, "invalid cache id" unless cache_id =~ /\A[\d]+\-[\d]+\-[\d]{4}\z/
+        # Earlier version used 3 part cache_id. Thus we should allow for
+        # the cache_id to have both 3 part and 4 part formats.
+        raise CarrierWave::InvalidParameter, "invalid cache id" unless cache_id =~ /\A[\d]+\-[\d]+(\-[\d]{4})?\-[\d]{4}\z/
         @cache_id = cache_id
       end
 

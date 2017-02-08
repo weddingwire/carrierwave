@@ -1,12 +1,10 @@
-# encoding: utf-8
-
 $:.unshift File.expand_path(File.join('..', '..', 'lib'), File.dirname(__FILE__))
 
 require File.join(File.dirname(__FILE__), 'activerecord')
 
 require 'rspec'
 require 'carrierwave'
-require 'sham_rack'
+require "webmock/cucumber"
 
 alias :running :lambda
 

@@ -1,5 +1,3 @@
-# encoding: utf-8
-
 module CarrierWave
   module Storage
 
@@ -64,6 +62,14 @@ module CarrierWave
       #
       def cache!(new_file)
         new_file.move_to(::File.expand_path(uploader.cache_path, uploader.root), uploader.permissions, uploader.directory_permissions, true)
+      rescue Errno::EMLINK => e
+        raise(e) if @cache_called
+        @cache_called = true
+
+        # NOTE: Remove cached files older than 10 minutes
+        clean_cache!(600)
+
+        cache!(new_file)
       end
 
       ##
@@ -100,7 +106,8 @@ module CarrierWave
 
       def clean_cache!(seconds)
         Dir.glob(::File.expand_path(::File.join(uploader.cache_dir, '*'), CarrierWave.root)).each do |dir|
-          time = dir.scan(/(\d+)-\d+-\d+/).first.map { |t| t.to_i }
+          # generate_cache_id returns key formated TIMEINT-PID-COUNTER-RND
+          time = dir.scan(/(\d+)-\d+-\d+-\d+/).first.map(&:to_i)
           time = Time.at(*time)
           if time < (Time.now.utc - seconds)
             FileUtils.rm_rf(dir)

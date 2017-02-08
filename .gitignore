@@ -8,9 +8,12 @@ more/activerecord/spec/db
 more/activerecord/spec/public
 more/datamapper/spec/public
 *.project
+spec/fixtures/*_copy.png
 spec/test.log
 spec/tmp
 *.swp
 .rvmrc
+.idea
 .bundle
 Gemfile.lock
+gemfiles/*.lock

@@ -23,6 +23,7 @@ module CarrierWave
         add_config :remove_previously_stored_files_after_update
 
         # fog
+        add_config :fog_provider
         add_config :fog_attributes
         add_config :fog_credentials
         add_config :fog_directory
@@ -70,8 +71,17 @@ module CarrierWave
         #     storage MyCustomStorageEngine
         #
         def storage(storage = nil)
-          if storage
-            self._storage = storage.is_a?(Symbol) ? eval(storage_engines[storage]) : storage
+          case storage
+          when Symbol
+            if storage_engine = storage_engines[storage]
+              self._storage = eval storage_engine
+            else
+              raise CarrierWave::UnknownStorageError, "Unknown storage: #{storage}"
+            end
+          when nil
+            storage
+          else
+            self._storage = storage
           end
           _storage
         end
@@ -108,6 +118,8 @@ module CarrierWave
           class_eval <<-RUBY, __FILE__, __LINE__ + 1
             def self.eager_load_fog(fog_credentials)
               # see #1198. This will hopefully no longer be necessary after fog 2.0
+              require self.fog_provider
+              require 'carrierwave/storage/fog'
               Fog::Storage.new(fog_credentials) if fog_credentials.present?
             end
 
@@ -121,12 +133,12 @@ module CarrierWave
             end
 
             def self.#{name}=(value)
-              eager_load_fog(value) if '#{name}' == 'fog_credentials'
+              eager_load_fog(value) if '#{name}' == 'fog_credentials' && value.present?
               @#{name} = value
             end
 
             def #{name}=(value)
-              self.class.eager_load_fog(value) if '#{name}' == 'fog_credentials'
+              self.class.eager_load_fog(value) if '#{name}' == 'fog_credentials' && value.present?
               @#{name} = value
             end
 
@@ -135,7 +147,7 @@ module CarrierWave
               value = self.class.#{name} unless instance_variable_defined?(:@#{name})
               if value.instance_of?(Proc)
                 value.arity >= 1 ? value.call(self) : value.call
-              else 
+              else
                 value
               end
             end
@@ -159,6 +171,7 @@ module CarrierWave
             }
             config.storage = :file
             config.cache_storage = :file
+            config.fog_provider = 'fog'
             config.fog_attributes = {}
             config.fog_credentials = {}
             config.fog_public = true

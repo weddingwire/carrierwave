@@ -1,5 +1,3 @@
-# encoding: utf-8
-
 require 'rubygems'
 require 'bundler/setup'
 
@@ -11,21 +9,8 @@ require 'logger'
 require 'carrierwave'
 require 'timecop'
 require 'open-uri'
-require 'sham_rack'
+require "webmock/rspec"
 require 'mini_magick'
-if RUBY_ENGINE == 'jruby'
-  require 'activerecord-jdbcmysql-adapter'
-else
-  require 'mysql2'
-end
-require 'fog'
-require 'storage/fog_helper'
-
-unless ENV['REMOTE'] == 'true'
-  Fog.mock!
-end
-
-require 'fog_credentials' # after Fog.mock!
 
 I18n.enforce_available_locales = false
 
@@ -53,52 +38,35 @@ module CarrierWave
     module MockStorage
       def mock_storage(kind)
         storage = double("storage for #{kind} uploader")
-        storage.stub(:setup!)
+        allow(storage).to receive(:setup!)
         storage
       end
     end
 
     module MockFiles
-      def stub_merb_tempfile(filename)
-        raise "#{path} file does not exist" unless File.exist?(file_path(filename))
-
-        t = Tempfile.new(filename)
-        FileUtils.copy_file(file_path(filename), t.path)
-
-        return t
-      end
-
       def stub_tempfile(filename, mime_type=nil, fake_name=nil)
         raise "#{path} file does not exist" unless File.exist?(file_path(filename))
 
-        t = Tempfile.new(filename)
-        FileUtils.copy_file(file_path(filename), t.path)
-
-        # This is stupid, but for some reason rspec won't play nice...
-        eval <<-EOF
-        def t.original_filename; '#{fake_name || filename}'; end
-        def t.content_type; '#{mime_type}'; end
-        def t.local_path; path; end
-        EOF
-
-        return t
+        tempfile = Tempfile.new(filename)
+        FileUtils.copy_file(file_path(filename), tempfile.path)
+        allow(tempfile).to receive_messages(:original_filename => fake_name || filename,
+                      :content_type => mime_type)
+        tempfile
       end
 
+      alias_method :stub_merb_tempfile, :stub_tempfile
+
       def stub_stringio(filename, mime_type=nil, fake_name=nil)
-        if filename
-          t = StringIO.new( IO.read( file_path( filename ) ) )
-        else
-          t = StringIO.new
-        end
-        t.stub(:local_path => "",
-                :original_filename => filename || fake_name,
-                :content_type => mime_type)
-        return t
+        file = IO.read( file_path( filename ) ) if filename
+        stringio = StringIO.new(file)
+        allow(stringio).to receive_messages(:local_path => "",
+                      :original_filename => filename || fake_name,
+                      :content_type => mime_type)
+        stringio
       end
 
       def stub_file(filename, mime_type=nil, fake_name=nil)
-        f = File.open(file_path(filename))
-        return f
+        File.open(file_path(filename))
       end
     end
 

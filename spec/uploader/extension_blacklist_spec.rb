@@ -1,78 +1,112 @@
-# encoding: utf-8
-
 require 'spec_helper'
 
 describe CarrierWave::Uploader do
-  before do
-    @uploader_class = Class.new(CarrierWave::Uploader::Base)
-    @uploader = @uploader_class.new
-  end
+  subject { lambda { uploader.cache!(test_file) } }
 
-  after do
-    FileUtils.rm_rf(public_path)
-  end
+  let(:uploader_class) { Class.new(CarrierWave::Uploader::Base) }
+  let(:uploader) { uploader_class.new }
+  let(:cache_id) { '1369894322-345-1234-2255' }
+  let(:test_file_name) { 'test.jpg' }
+  let(:test_file) { File.open(file_path(test_file_name)) }
+
+  after { FileUtils.rm_rf(public_path) }
+
+  before { allow(CarrierWave).to receive(:generate_cache_id).and_return(cache_id) }
 
   describe '#cache!' do
+    before { allow(uploader).to receive(:extension_blacklist).and_return(extension_blacklist) }
 
-    before do
-      CarrierWave.stub(:generate_cache_id).and_return('1369894322-345-2255')
+    context "when there are no blacklisted extensions" do
+      let(:extension_blacklist) { nil }
+
+      it "doesn't raise an integrity error" do
+        is_expected.not_to raise_error
+      end
     end
 
-    it "should not raise an integrity error if there is no black list" do
-      @uploader.stub(:extension_black_list).and_return(nil)
-      running {
-        @uploader.cache!(File.open(file_path('test.jpg')))
-      }.should_not raise_error
-    end
+    context "when there is a blacklist" do
+      context "when the blacklist is an array of values" do
+        context "when the file extension matches a blacklisted extension" do
+          let(:extension_blacklist) { %w(jpg gif png) }
 
-    it "should raise an integrity error if there is a black list and the file is on it" do
-      @uploader.stub(:extension_black_list).and_return(%w(jpg gif png))
-      running {
-        @uploader.cache!(File.open(file_path('test.jpg')))
-      }.should raise_error(CarrierWave::IntegrityError)
-    end
+          it "raises an integrity error" do
+            is_expected.to raise_error(CarrierWave::IntegrityError)
+          end
+        end
 
-    it "should not raise an integrity error if there is a black list and the file is not on it" do
-      @uploader.stub(:extension_black_list).and_return(%w(txt doc xls))
-      running {
-        @uploader.cache!(File.open(file_path('test.jpg')))
-      }.should_not raise_error
-    end
+        context "when the file extension doesn't match a blacklisted extension" do
+          let(:extension_blacklist) { %w(txt doc xls) }
 
-    it "should not raise an integrity error if there is a black list and the file is not on it, using start of string matcher" do
-      @uploader.stub(:extension_black_list).and_return(%w(txt))
-      running {
-        @uploader.cache!(File.open(file_path('bork.ttxt')))
-      }.should_not raise_error
-    end
+          it "doesn't raise an integrity error" do
+            is_expected.to_not raise_error
+          end
+        end
 
-    it "should not raise an integrity error if there is a black list and the file is not on it, using end of string matcher" do
-      @uploader.stub(:extension_black_list).and_return(%w(txt))
-      running {
-        @uploader.cache!(File.open(file_path('bork.txtt')))
-      }.should_not raise_error
-    end
+        context "when the file extension has only the starting part of a blacklisted extension string" do
+          let(:text_file_name) { 'bork.ttxt' }
+          let(:extension_blacklist) { %w(txt) }
 
-    it "should compare black list in a case insensitive manner when capitalized extension provided" do
-      @uploader.stub(:extension_black_list).and_return(%w(jpg gif png))
-      running {
-        @uploader.cache!(File.open(file_path('case.JPG')))
-      }.should raise_error(CarrierWave::IntegrityError)
-    end
+          it "doesn't raise an integrity error" do
+            is_expected.to_not raise_error
+          end
+        end
 
-    it "should compare black list in a case insensitive manner when lowercase extension provided" do
-      @uploader.stub(:extension_black_list).and_return(%w(JPG GIF PNG))
-      running {
-        @uploader.cache!(File.open(file_path('test.jpg')))
-      }.should raise_error(CarrierWave::IntegrityError)
-    end
+        context "when the file extension has only the ending part of a blacklisted extension string" do
+          let(:text_file_name) { 'bork.txtt' }
+          let(:extension_blacklist) { %w(txt) }
 
-    it "should accept and check regular expressions" do
-      @uploader.stub(:extension_black_list).and_return([/jpe?g/, 'gif', 'png'])
-      running {
-        @uploader.cache!(File.open(file_path('test.jpeg')))
-      }.should raise_error(CarrierWave::IntegrityError)
+          it "doesn't raise an integrity error" do
+            is_expected.to_not raise_error
+          end
+        end
+
+        context "when the file has a capitalized extension of a blacklisted extension" do
+          let(:text_file_name) { 'case.JPG' }
+          let(:extension_blacklist) { %w(jpg gif png) }
+
+          it "raise an integrity error" do
+            is_expected.to raise_error(CarrierWave::IntegrityError)
+          end
+        end
+
+        context "when the file has an extension which matches a blacklisted capitalized extension" do
+          let(:text_file_name) { 'test.jpg' }
+          let(:extension_blacklist) { %w(JPG GIF PNG) }
+
+          it "raise an integrity error" do
+            is_expected.to raise_error(CarrierWave::IntegrityError)
+          end
+        end
+
+        context "when the file has an extension which matches the blacklisted extension regular expression" do
+          let(:text_file_name) { 'test.jpeg' }
+          let(:extension_blacklist) { [/jpe?g/, 'gif', 'png'] }
+
+          it "raise an integrity error" do
+            is_expected.to raise_error(CarrierWave::IntegrityError)
+          end
+        end
+      end
+
+      context "when the blacklist is a single value" do
+        context "when the file has an extension which is equal the blacklisted extension string" do
+          let(:test_file_name) { 'test.jpeg' }
+          let(:extension_blacklist) { 'jpeg' }
+
+          it "raises an integrity error" do
+            is_expected.to raise_error(CarrierWave::IntegrityError)
+          end
+        end
+
+        context "when the file has a name which matches the blacklisted extension regular expression" do
+          let(:text_file_name) { 'test.jpeg' }
+          let(:extension_blacklist) { /jpe?g/ }
+
+          it "raise an integrity error" do
+            is_expected.to raise_error(CarrierWave::IntegrityError)
+          end
+        end
+      end
     end
   end
-
 end

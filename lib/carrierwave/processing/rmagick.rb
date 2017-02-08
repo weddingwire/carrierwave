@@ -1,5 +1,3 @@
-# encoding: utf-8
-
 module CarrierWave
 
   ##
@@ -62,7 +60,9 @@ module CarrierWave
 
     included do
       begin
-        require "RMagick" unless defined?(::Magick)
+        require "rmagick"
+      rescue LoadError
+        require "RMagick"
       rescue LoadError => e
         e.message << " (You may need to install the rmagick gem)"
         raise e
@@ -250,6 +250,28 @@ module CarrierWave
     end
 
     ##
+    # Returns the width of the image.
+    #
+    # === Returns
+    #
+    # [Integer] the image's width in pixels
+    #
+    def width
+      rmagick_image.columns
+    end
+
+    ##
+    # Returns the height of the image.
+    #
+    # === Returns
+    #
+    # [Integer] the image's height in pixels
+    #
+    def height
+      rmagick_image.rows
+    end
+
+    ##
     # Manipulate the image with RMagick. This method will load up an image
     # and then pass each of its frames to the supplied block. It will then
     # save the image to disk.
@@ -346,7 +368,11 @@ module CarrierWave
     end
 
     def destroy_image(image)
-      image.destroy! if image.respond_to?(:destroy!)
+      image.try(:destroy!)
+    end
+
+    def rmagick_image
+      ::Magick::Image.read(current_path).first
     end
 
   end # RMagick

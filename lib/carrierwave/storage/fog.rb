@@ -1,7 +1,3 @@
-# encoding: utf-8
-
-require "fog" unless defined?(::Fog)
-
 module CarrierWave
   module Storage
 
@@ -27,7 +23,7 @@ module CarrierWave
     # [:aws_access_key_id]
     # [:aws_secret_access_key]
     # [:region]                 (optional) defaults to 'us-east-1'
-    #   :region should be one of ['eu-west-1', 'us-east-1', 'ap-southeast-1', 'us-west-1', 'ap-northeast-1']
+    #   :region should be one of ['eu-west-1', 'us-east-1', 'ap-southeast-1', 'us-west-1', 'ap-northeast-1', 'eu-central-1']
     #
     #
     # Google credentials contain the following keys:
@@ -140,11 +136,10 @@ module CarrierWave
           :key    => uploader.fog_directory,
           :public => uploader.fog_public
         ).files.all(:prefix => uploader.cache_dir).each do |file|
-          time = file.key.scan(/(\d+)-\d+-\d+/).first.map { |t| t.to_i }
+          # generate_cache_id returns key formated TIMEINT-PID-COUNTER-RND
+          time = file.key.scan(/(\d+)-\d+-\d+-\d+/).first.map { |t| t.to_i }
           time = Time.at(*time)
-          if time < (Time.now.utc - seconds)
-            file.destroy
-          end
+          file.destroy if time < (Time.now.utc - seconds)
         end
       end
 
@@ -193,15 +188,17 @@ module CarrierWave
             # avoid a get by using local references
             local_directory = connection.directories.new(:key => @uploader.fog_directory)
             local_file = local_directory.files.new(:key => path)
-            if @uploader.fog_credentials[:provider] == "AWS"
-              local_file.url(::Fog::Time.now + @uploader.fog_authenticated_url_expiration, options)
-            elsif ['Rackspace', 'OpenStack'].include?(@uploader.fog_credentials[:provider])
-              connection.get_object_https_url(@uploader.fog_directory, path, ::Fog::Time.now + @uploader.fog_authenticated_url_expiration)
-            else
-              local_file.url(::Fog::Time.now + @uploader.fog_authenticated_url_expiration)
+            expire_at = ::Fog::Time.now + @uploader.fog_authenticated_url_expiration
+            case @uploader.fog_credentials[:provider]
+              when 'AWS'
+                local_file.url(expire_at, options)
+              when 'Rackspace'
+                connection.get_object_https_url(@uploader.fog_directory, path, expire_at, options)
+              when 'OpenStack'
+                connection.get_object_https_url(@uploader.fog_directory, path, expire_at)
+              else
+                local_file.url(expire_at)
             end
-          else
-            nil
           end
         end
 
@@ -213,7 +210,7 @@ module CarrierWave
         # [String] value of content-type
         #
         def content_type
-          @content_type || file.content_type
+          @content_type || !file.nil? && file.content_type
         end
 
         ##
@@ -288,7 +285,7 @@ module CarrierWave
         # [Integer] size of file body
         #
         def size
-          file.content_length
+          file.nil? ? 0 : file.content_length
         end
 
         ##
@@ -314,7 +311,7 @@ module CarrierWave
             fog_file = new_file.to_file
             @content_type ||= new_file.content_type
             @file = directory.files.create({
-              :body         => fog_file ? fog_file : new_file.read,
+              :body         => (fog_file ? fog_file : new_file).read,
               :content_type => @content_type,
               :key          => path,
               :public       => @uploader.fog_public
@@ -343,7 +340,7 @@ module CarrierWave
             end
           else
             # AWS/Google optimized for speed over correctness
-            case @uploader.fog_credentials[:provider]
+            case @uploader.fog_credentials[:provider].to_s
             when 'AWS'
               # check if some endpoint is set in fog_credentials
               if @uploader.fog_credentials.has_key?(:endpoint)
@@ -359,7 +356,8 @@ module CarrierWave
                 end
               end
             when 'Google'
-              "https://commondatastorage.googleapis.com/#{@uploader.fog_directory}/#{encoded_path}"
+              # https://cloud.google.com/storage/docs/access-public-data
+              "https://storage.googleapis.com/#{@uploader.fog_directory}/#{encoded_path}"
             else
               # avoid a get by just using local reference
               directory.files.new(:key => path).public_url
@@ -394,9 +392,8 @@ module CarrierWave
         # [NilClass] no file name available
         #
         def filename(options = {})
-          if file_url = url(options)
-            URI.decode(file_url.split('?').first).gsub(/.*\/(.*?$)/, '\1')
-          end
+          return unless file_url = url(options)
+          CGI.unescape(file_url.split('?').first).gsub(/.*\/(.*?$)/, '\1')
         end
 
         ##

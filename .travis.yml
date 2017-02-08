@@ -1,27 +1,65 @@
-before_install:
-  - gem install bundler
+language: ruby
 
-notifications:
-  email: false
+cache: bundler
 
 rvm:
- - 1.9.3
- - 2.0.0
- - 2.1.1
- - 2.1.2
+ - 2.0
+ - 2.1
+ - 2.2.5
+ - 2.3.1
  - ruby-head
  - jruby
+ - jruby-head
+
+env:
+  global:
+    - JRUBY_OPTS="--2.0"
 
 gemfile:
   - Gemfile
-  - gemfiles/rails-3-2-stable.gemfile
   - gemfiles/rails-4-0-stable.gemfile
   - gemfiles/rails-4-1-stable.gemfile
+  - gemfiles/rails-4-2-stable.gemfile
+  - gemfiles/rails-5-0-stable.gemfile
   - gemfiles/rails-master.gemfile
 
-matrix:
-  allow_failures:
-    - rvm: ruby-head
+sudo: false
 
 before_script:
-  - "mysql -e 'create database carrierwave_test;'"
+  - psql -c 'create database carrierwave_test;' -U postgres
+
+matrix:
+  exclude:
+    - rvm: 2.0
+      gemfile: Gemfile
+    - rvm: 2.0
+      gemfile: gemfiles/rails-master.gemfile
+    - rvm: 2.1
+      gemfile: Gemfile
+    - rvm: 2.1
+      gemfile: gemfiles/rails-master.gemfile
+    - rvm: 2.0
+      gemfile: gemfiles/rails-5-0-stable.gemfile
+    - rvm: 2.1
+      gemfile: gemfiles/rails-5-0-stable.gemfile
+    - rvm: jruby
+      gemfile: Gemfile
+    - rvm: jruby
+      gemfile: gemfiles/rails-master.gemfile
+    - rvm: jruby
+      gemfile: gemfiles/rails-5-0-stable.gemfile
+    - rvm: jruby-head
+      gemfile: gemfiles/rails-master.gemfile
+  allow_failures:
+    - rvm: ruby-head
+    - rvm: jruby-head
+    - gemfile: gemfiles/rails-master.gemfile
+  fast_finish: true
+
+notifications:
+  email: false
+  slack:
+    secure: Npzanyv/LXLIRlrNs8iTUbZNRhXlP+K2ZpjZoS2UKkr09jYyP1qdf5a//R3Lu7Yat7g2b4qTJGbaZBEMUQSVaJ6UX6quiBJjVWxjxjQ4Ugk8k/yOIAcGEGYPfS6YzRXemRwo9j4uy76cmwlv8cwEuYTSTBRK4XrdYHslX6pKSXM=
+
+addons:
+  postgresql: "9.3"

@@ -1,70 +1,79 @@
-# encoding: utf-8
-
 require 'spec_helper'
 
 describe CarrierWave::Uploader do
+  let(:uploader_class) { Class.new(CarrierWave::Uploader::Base) }
+  let(:uploader) { uploader_class.new }
+  let(:test_file_name) { 'test.jpg' }
+  let(:test_file) { File.open(file_path(test_file_name)) }
+  let(:path) { '1369894322-345-1234-2255/test.jpeg' }
 
-  before do
-    @uploader_class = Class.new(CarrierWave::Uploader::Base)
-    @uploader = @uploader_class.new
-  end
-
-  after do
-    FileUtils.rm_rf(public_path)
-  end
+  after { FileUtils.rm_rf(public_path) }
 
   describe '#blank?' do
-    it "should be true when nothing has been done" do
-      @uploader.should be_blank
+    subject { uploader }
+
+    context "when nothing has been done" do
+      it { is_expected.to be_blank }
     end
 
-    it "should not be true when the file is empty" do
-      @uploader.retrieve_from_cache!('1369894322-345-2255/test.jpeg')
-      @uploader.should be_blank
+    context "when file is empty" do
+      before { uploader.retrieve_from_cache!(path) }
+
+      it { is_expected.to be_blank }
     end
 
-    it "should not be true when a file has been cached" do
-      @uploader.cache!(File.open(file_path('test.jpg')))
-      @uploader.should_not be_blank
+    context "when file has been cached" do
+      before { uploader.cache!(test_file) }
+
+      it { is_expected.not_to be_blank }
     end
   end
 
   describe '#read' do
-    it "should be nil by default" do
-      @uploader.read.should be_nil
+    subject { uploader.read }
+
+    describe "default behavior" do
+      it { is_expected.to be nil }
     end
 
-    it "should read the contents of a cached file" do
-      @uploader.cache!(File.open(file_path('test.jpg')))
-      @uploader.read.should == "this is stuff"
+    context "when file is cached" do
+      before { uploader.cache!(test_file) }
+
+      it { is_expected.to eq("this is stuff") }
     end
   end
 
   describe '#size' do
-    it "should be zero by default" do
-      @uploader.size.should == 0
+    subject { uploader.size }
+
+    describe "default behavior" do
+      it { is_expected.to be 0 }
     end
 
-    it "should get the size of a cached file" do
-      @uploader.cache!(File.open(file_path('test.jpg')))
-      @uploader.size.should == 13
+    context "when file is cached" do
+      before { uploader.cache!(test_file) }
+
+      it { is_expected.to be 13 }
     end
   end
 
   describe '#content_type' do
-    it "should be nil when nothing has been done" do
-      @uploader.content_type.should be_nil
+    subject { uploader.content_type }
+
+    context "when nothing has been done" do
+      it { is_expected.to be_nil }
     end
 
-    it "should get the content type when the file has been cached" do
-      @uploader.cache!(File.open(file_path('test.jpg')))
-      @uploader.content_type.should == 'image/jpeg'
+    context "when the file has been cached" do
+      before { uploader.cache!(test_file) }
+
+      it { is_expected.to eq('image/jpeg') }
     end
 
-    it "should get the content type when the file is empty" do
-      @uploader.retrieve_from_cache!('1369894322-345-2255/test.jpeg')
-      @uploader.content_type.should == 'image/jpeg'
+    context "when the file is empty" do
+      before { uploader.retrieve_from_cache!(path) }
+
+      it { is_expected.to eq('image/jpeg') }
     end
   end
-
 end

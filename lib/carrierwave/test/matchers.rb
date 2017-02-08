@@ -1,5 +1,3 @@
-# encoding: utf-8
-
 module CarrierWave
   module Test
 
@@ -301,6 +299,39 @@ module CarrierWave
         BeNoTallerThan.new(height)
       end
 
+      class BeFormat # :nodoc:
+        def initialize(expected)
+          @expected = expected
+        end
+
+        def matches?(actual)
+          @actual = actual
+          # Satisfy expectation here. Return false or raise an error if it's not met.
+          image = ImageLoader.load_image(@actual.current_path)
+          @actual_expected = image.format
+          !@expected.nil? && @actual_expected.casecmp(@expected).zero?
+        end
+
+        def failure_message
+          "expected #{@actual.current_path.inspect} to have #{@expected} format, but it was #{@actual_expected}."
+        end
+
+        def failure_message_when_negated
+          "expected #{@actual.current_path.inspect} not to have #{@expected} format, but it did."
+        end
+
+        def description
+          "have #{@expected} format"
+        end
+
+        # RSpec 2 compatibility:
+        alias_method :negative_failure_message, :failure_message_when_negated
+      end
+
+      def be_format(expected)
+        BeFormat.new(expected)
+      end
+
       class ImageLoader # :nodoc:
         def self.load_image(filename)
           if defined? ::MiniMagick
@@ -330,6 +361,10 @@ module CarrierWave
           image.rows
         end
 
+        def format
+          image.format
+        end
+
         def initialize(filename)
           @image = ::Magick::Image.read(filename).first
         end
@@ -345,6 +380,10 @@ module CarrierWave
           image[:height]
         end
 
+        def format
+          image[:format]
+        end
+
         def initialize(filename)
           @image = ::MiniMagick::Image.open(filename)
         end
@@ -353,4 +392,3 @@ module CarrierWave
     end # Matchers
   end # Test
 end # CarrierWave
-

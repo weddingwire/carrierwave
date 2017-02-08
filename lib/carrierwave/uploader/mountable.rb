@@ -1,5 +1,3 @@
-# encoding: utf-8
-
 module CarrierWave
   module Uploader
     module Mountable
@@ -7,13 +5,14 @@ module CarrierWave
       attr_reader :model, :mounted_as
 
       ##
-      # If a model is given as the first parameter, it will be stored in the uploader, and
-      # available throught +#model+. Likewise, mounted_as stores the name of the column
-      # where this instance of the uploader is mounted. These values can then be used inside
-      # your uploader.
+      # If a model is given as the first parameter, it will be stored in the
+      # uploader, and available through +#model+. Likewise, mounted_as stores
+      # the name of the column where this instance of the uploader is mounted.
+      # These values can then be used inside your uploader.
       #
-      # If you do not wish to mount your uploaders with the ORM extensions in -more then you
-      # can override this method inside your uploader. Just be sure to call +super+
+      # If you do not wish to mount your uploaders with the ORM extensions in
+      # -more then you can override this method inside your uploader. Just be
+      # sure to call +super+
       #
       # === Parameters
       #

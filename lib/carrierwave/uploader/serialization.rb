@@ -1,5 +1,3 @@
-# encoding: utf-8
-
 require "json"
 require "active_support/core_ext/hash"
 
@@ -13,7 +11,7 @@ module CarrierWave
       end
 
       def as_json(options=nil)
-        Hash[mounted_as || "uploader", serializable_hash]
+        serializable_hash
       end
 
       def to_json(options=nil)
